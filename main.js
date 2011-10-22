@@ -91,10 +91,25 @@ function loadFiles(dir, options) {
 }
 
 /**
- * End of patch (also see exports and end of file)
+ * Load attachments into a doc.
+ *
+ * Use couchapp.loadFiles() in app.js like this:
+ *
+ *   couchapp.loadAttachments(ddoc, path.join(__dirname, 'attachments'));
+ *
+ * Optionally prefix attachment names, or process attachment contents.
+ *
+ *   couchapp.loadAttachments(ddoc, path.join(__dirname, 'templates'), {
+ *     operators: [function(f, data) {
+ *        var content = data.toString('utf8'));
+ *        // Do something...
+ *        return new Buffer(content);
+ *     }]
+ *   });
+ *
  */
-
-function loadAttachments (doc, root, prefix) {
+function loadAttachments (doc, root, options) {
+  options = options || {};
   doc.__attachments = doc.__attachments || []
   try {
     fs.statSync(root)
@@ -102,7 +117,11 @@ function loadAttachments (doc, root, prefix) {
     throw e
     throw new Error("Cannot stat file "+root)
   }
-  doc.__attachments.push({root:root, prefix:prefix});
+  doc.__attachments.push({
+    root: root,
+    prefix: options.prefix,
+    operators: options.operators
+  });
 }
 
 function copy (obj) {
@@ -180,6 +199,13 @@ function createApp (doc, url, cb) {
         for (i in files) { (function (f) {
           pending += 1
           fs.readFile(f, function (err, data) {
+
+            if (data && att.operators) {
+              att.operators.forEach(function (op) {
+                data = op(f, data);
+              });
+            }
+
             f = f.replace(att.root, att.prefix || '');
             if (f[0] == '/') f = f.slice(1)
             if (!err) {
