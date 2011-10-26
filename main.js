@@ -236,7 +236,6 @@ function createApp (doc, url, cb) {
                 uploads = att.aggregator(uploads);
               }
               attachments = attachments.concat(uploads);
-              console.log(attachments.length);
 
               // If this is the last attachmetn set, push files.
               wait -=1;
