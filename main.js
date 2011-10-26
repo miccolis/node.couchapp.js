@@ -97,14 +97,21 @@ function loadFiles(dir, options) {
  *
  *   couchapp.loadAttachments(ddoc, path.join(__dirname, 'attachments'));
  *
- * Optionally prefix attachment names, or process attachment contents.
+ * Optionally prefix attachment names, or process attachment contents, and
+ * aggregate attachments.
  *
  *   couchapp.loadAttachments(ddoc, path.join(__dirname, 'templates'), {
  *     operators: [function(f, data) {
  *        var content = data.toString('utf8'));
  *        // Do something...
  *        return new Buffer(content);
- *     }]
+ *     }],
+ *     aggregator: function(files) {
+ *        // `files` is an array of objects..
+ *        // e.g. [{data: '', name: '', mime: ''}]
+ *        // Return aggregated version of this array.
+ *        return files;
+ *     }
  *   });
  *
  */
@@ -120,7 +127,8 @@ function loadAttachments (doc, root, options) {
   doc.__attachments.push({
     root: root,
     prefix: options.prefix,
-    operators: options.operators
+    operators: options.operators,
+    aggregator: options.aggregator
   });
 }
 
@@ -181,9 +189,9 @@ function createApp (doc, url, cb) {
   }
   
   app.push = function (callback) {
-    var revpos
-      , pending = 0
-      ;
+    var revpos,
+        pending = 0,
+        attachments = [];
     
     console.log('Preparing.')
     var doc = app.current;
@@ -196,40 +204,60 @@ function createApp (doc, url, cb) {
     
     app.doc.__attachments.forEach(function (att) {
       watch.walk(att.root, {ignoreDotFiles:true}, function (err, files) {
+        pending = Object.keys(files).length;
         for (i in files) { (function (f) {
-          pending += 1
-          fs.readFile(f, function (err, data) {
 
-            if (data && att.operators) {
+          fs.readFile(f, function (err, data) {
+            if (err) {
+              pending -= 1;
+              return;
+            }
+
+            // Allow this fils to be transformed.
+            if (att.operators) {
               att.operators.forEach(function (op) {
                 data = op(f, data);
               });
             }
 
+            // Prepare the attachment name.
             f = f.replace(att.root, att.prefix || '');
             if (f[0] == '/') f = f.slice(1)
-            if (!err) {
-              var d = data.toString('base64')
-                , md5 = crypto.createHash('md5')
-                , mime = mimetypes.lookup(path.extname(f).slice(1))
-                ;
-              md5.update(d)
-              md5 = md5.digest('hex')
-              if (app.doc.attachments_md5[f] && app.doc._attachments[f]) {
-                if (app.doc._attachments[f].revpos === app.doc.attachments_md5[f].revpos && 
-                    app.doc.attachments_md5[f].md5 === md5) {   
-                  pending -= 1
-                  if (pending === 0) {
-                    push(callback)
-                  }
-                  return; // Does not need to be updated.
-                }
-              }
-              app.doc._attachments[f] = {data:d, content_type:mime};
-              app.doc.attachments_md5[f] = {revpos:revpos + 1, md5:md5};
-            }
+
+            var mime = mimetypes.lookup(path.extname(f).slice(1))
+            attachments.push({data:data, name:f, mime: mime});
+
+            // If not waiting, aggregate and push files.
             pending -= 1
             if (pending === 0) {
+
+              // Run aggregation code.
+              if (att.aggregator) {
+                attachments = att.aggregator(attachments);
+              }
+
+              attachments.forEach(function (attachment) {
+                  var d = attachment.data.toString('base64'),
+                      f = attachment.name,
+                      mime = attachment.mime;
+
+                  var md5 = crypto.createHash('md5');
+                  md5.update(data);
+                  md5 = md5.digest('hex');
+
+                  // If this file already has a record, with a matching revision
+                  // and md5 we don't need to push it.
+                  if (app.doc.attachments_md5[f]
+                    && app.doc._attachments[f]
+                    && app.doc._attachments[f].revpos === app.doc.attachments_md5[f].revpos
+                    && app.doc.attachments_md5[f].md5 === md5
+                  ) {
+                    return;
+                  }
+                  // Put the attachment on the doc so it gets pushed.
+                  app.doc._attachments[f] = {data:d, content_type:mime};
+                  app.doc.attachments_md5[f] = {revpos:revpos + 1, md5:md5};
+              });
               push(callback)
             }
           })
