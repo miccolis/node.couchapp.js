@@ -190,7 +190,7 @@ function createApp (doc, url, cb) {
   
   app.push = function (callback) {
     var revpos,
-        pending = 0,
+        wait = app.doc.__attachments.length;
         attachments = [];
     
     console.log('Preparing.')
@@ -204,7 +204,7 @@ function createApp (doc, url, cb) {
     
     app.doc.__attachments.forEach(function (att) {
       watch.walk(att.root, {ignoreDotFiles:true}, function (err, files) {
-        pending = Object.keys(files).length;
+        var pending = Object.keys(files).length;
         for (i in files) { (function (f) {
 
           fs.readFile(f, function (err, data) {
@@ -258,7 +258,10 @@ function createApp (doc, url, cb) {
                   app.doc._attachments[f] = {data:d, content_type:mime};
                   app.doc.attachments_md5[f] = {revpos:revpos + 1, md5:md5};
               });
-              push(callback)
+
+              // If this is the last attachment set, push it.
+              wait -=1;
+              if (wait === 0) push(callback);
             }
           })
         })(i)}
