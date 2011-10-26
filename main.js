@@ -205,6 +205,7 @@ function createApp (doc, url, cb) {
     app.doc.__attachments.forEach(function (att) {
       watch.walk(att.root, {ignoreDotFiles:true}, function (err, files) {
         var pending = Object.keys(files).length;
+        var uploads = [];
         for (i in files) { (function (f) {
 
           fs.readFile(f, function (err, data) {
@@ -225,43 +226,45 @@ function createApp (doc, url, cb) {
             if (f[0] == '/') f = f.slice(1)
 
             var mime = mimetypes.lookup(path.extname(f).slice(1))
-            attachments.push({data:data, name:f, mime: mime});
+            uploads.push({data:data, name:f, mime: mime});
 
-            // If not waiting, aggregate and push files.
+            // If we've got all the files for this set, aggregate.
             pending -= 1
             if (pending === 0) {
 
-              // Run aggregation code.
               if (att.aggregator) {
-                attachments = att.aggregator(attachments);
+                uploads = att.aggregator(uploads);
               }
+              attachments = attachments.concat(uploads);
+              console.log(attachments.length);
 
-              attachments.forEach(function (attachment) {
-                  var d = attachment.data.toString('base64'),
-                      f = attachment.name,
-                      mime = attachment.mime;
-
-                  var md5 = crypto.createHash('md5');
-                  md5.update(data);
-                  md5 = md5.digest('hex');
-
-                  // If this file already has a record, with a matching revision
-                  // and md5 we don't need to push it.
-                  if (app.doc.attachments_md5[f]
-                    && app.doc._attachments[f]
-                    && app.doc._attachments[f].revpos === app.doc.attachments_md5[f].revpos
-                    && app.doc.attachments_md5[f].md5 === md5
-                  ) {
-                    return;
-                  }
-                  // Put the attachment on the doc so it gets pushed.
-                  app.doc._attachments[f] = {data:d, content_type:mime};
-                  app.doc.attachments_md5[f] = {revpos:revpos + 1, md5:md5};
-              });
-
-              // If this is the last attachment set, push it.
+              // If this is the last attachmetn set, push files.
               wait -=1;
-              if (wait === 0) push(callback);
+              if (wait === 0) {
+                attachments.forEach(function (attachment) {
+                    var d = attachment.data.toString('base64'),
+                        f = attachment.name,
+                        mime = attachment.mime;
+
+                    var md5 = crypto.createHash('md5');
+                    md5.update(data);
+                    md5 = md5.digest('hex');
+
+                    // If this file already has a record, with a matching revision
+                    // and md5 we don't need to push it.
+                    if (app.doc.attachments_md5[f]
+                      && app.doc._attachments[f]
+                      && app.doc._attachments[f].revpos === app.doc.attachments_md5[f].revpos
+                      && app.doc.attachments_md5[f].md5 === md5
+                    ) {
+                      return;
+                    }
+                    // Put the attachment on the doc so it gets pushed.
+                    app.doc._attachments[f] = {data:d, content_type:mime};
+                    app.doc.attachments_md5[f] = {revpos:revpos + 1, md5:md5};
+                });
+                push(callback);
+              }
             }
           })
         })(i)}
