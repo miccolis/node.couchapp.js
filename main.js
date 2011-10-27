@@ -246,7 +246,7 @@ function createApp (doc, url, cb) {
                         mime = attachment.mime;
 
                     var md5 = crypto.createHash('md5');
-                    md5.update(data);
+                    md5.update(d);
                     md5 = md5.digest('hex');
 
                     // If this file already has a record, with a matching revision
