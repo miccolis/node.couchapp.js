@@ -188,9 +188,10 @@ function createApp (doc, url, cb) {
   }
   
   app.push = function (callback) {
-    var revpos,
-        wait = app.doc.__attachments.length;
-        attachments = [];
+    var revpos
+      , wait = app.doc.__attachments.length
+      , attachments = []
+      ;
     
     console.log('Preparing.')
     var doc = app.current;
@@ -235,13 +236,14 @@ function createApp (doc, url, cb) {
               }
               attachments = attachments.concat(uploads);
 
-              // If this is the last attachmetn set, push files.
+              // If this is the last attachment set, push files.
               wait -=1;
               if (wait === 0) {
                 attachments.forEach(function (attachment) {
-                    var d = attachment.data.toString('base64'),
-                        f = attachment.name,
-                        mime = attachment.mime;
+                    var d = attachment.data.toString('base64')
+                     ,  f = attachment.name
+                     ,  mime = attachment.mime
+                     ;
 
                     var md5 = crypto.createHash('md5');
                     md5.update(d);
