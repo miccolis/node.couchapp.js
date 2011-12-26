@@ -1,5 +1,4 @@
 var path = require('path')
-  , sys = require('sys')
   , fs = require('fs')
   , watch = require('watch')
   , request = require('request')
@@ -207,7 +206,6 @@ function createApp (doc, url, cb) {
         var pending = Object.keys(files).length;
         var uploads = [];
         for (i in files) { (function (f) {
-
           fs.readFile(f, function (err, data) {
             if (err) {
               pending -= 1;
